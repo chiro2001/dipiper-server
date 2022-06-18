@@ -15,7 +15,8 @@ function sleep(ms) {
 }
 
 const codeMessage = {
-    200: "OK"
+    200: "OK",
+    500: "Internal Error"
 };
 
 function wrap(data, code, message) {
@@ -58,10 +59,31 @@ function setupBackend() {
     // Json 中间件
     app.use(express.json());
 
+    // 获取股票列表
     app.get(apiPrefix + "stockList", async (req, res) => {
-        const data = await getStockList(gdb);
+        res.send(wrap(await getStockList(gdb)));
+    });
 
-        res.send(wrap(data));
+    // 直接调用 API
+    app.get(apiPrefix + ":package/:function", async (req, res) => {
+        const params = req.params;
+        const query = req.query;
+        logger.info("params: ", params);
+        logger.info("query: ", req.query);
+        const queryKeys = Object.keys(query).sort();
+        const args = queryKeys.map(key => query[key])
+        try {
+            logger.info("package ", dip.stock[params['package']], " function ", dip.stock[params['package']][params['function']], " args: ", args);
+            const data = await dip.stock[params['package']][params['function']](...args);
+            dip.stock.symbols.getAreaList().then(data => {
+                console.log(data);
+            });
+            logger.info("data: ", data);
+            res.send(wrap(data));
+        } catch (e) {
+            console.error(e);
+            res.send(wrap(null, 500, e.toString()));
+        }
     });
 }
 
