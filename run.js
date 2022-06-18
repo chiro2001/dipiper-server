@@ -2,10 +2,28 @@ const logger = require('simple-node-logger').createSimpleLogger();
 const dip = require("dipiper");
 const MongoClient = require('mongodb').MongoClient;
 const mongoURI = "mongodb://localhost:27017/dipiper";
+const express = require("express");
+
+const runPort = 8000;
+const app = express();
+const apiPrefix = "/api/v1/";
+var gdb = null;
 
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(() => resolve(), ms));
+}
+
+const codeMessage = {
+    200: "OK"
+};
+
+function wrap(data, code, message) {
+    return {
+        data,
+        code: code || 200,
+        message: message || codeMessage[code || 200]
+    };
 }
 
 
@@ -20,7 +38,10 @@ async function updateStockList(db) {
 }
 
 async function getStockList(db) {
-
+    const col = db.collection("stockList");
+    const data = await col.find({}).toArray();
+    console.log(data);
+    return data;
 }
 
 async function getDB() {
@@ -33,16 +54,35 @@ async function getDB() {
     });
 }
 
+function setupBackend() {
+    // Json 中间件
+    app.use(express.json());
+
+    app.get(apiPrefix + "stockList", async (req, res) => {
+        const data = await getStockList(gdb);
+
+        res.send(wrap(data));
+    });
+}
+
+async function launchBackend() {
+    app.listen(runPort, () => {
+        logger.info("Server launched at port ", runPort);
+    });
+}
+
 async function main() {
     const database = await getDB();
     const db = database.db("dipiper");
-    logger.info("hi");
+    gdb = db;
+    setupBackend();
+    launchBackend();
     let stockCount = await db.collection("stockList").countDocuments();
     if (stockCount < 3000) await updateStockList(db);
     stockCount = await db.collection("stockList").countDocuments();
     logger.info("stock count: ", stockCount);
-    await sleep(1000);
-    process.exit(0);
+    // await sleep(1000);
+    // process.exit(0);
 }
 
 main();
