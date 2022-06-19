@@ -10,6 +10,8 @@ npm install
 
 ### 运行服务器
 
+运行前请开启 Python 服务器。
+
 ```shell
 npm run dev
 ```
