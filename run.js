@@ -3,12 +3,33 @@ const dip = require("dipiper");
 const MongoClient = require('mongodb').MongoClient;
 const mongoURI = "mongodb://localhost:27017/dipiper";
 const express = require("express");
+const jsonRPC = require("json-rpc-2.0");
+const fetch = require("node-fetch");
+const JSONRPCClient = jsonRPC.JSONRPCClient;
 
 const runPort = 8000;
 const app = express();
 const apiPrefix = "/api/v1/";
 var gdb = null;
 
+const client = new JSONRPCClient((jsonRPCRequest) =>
+    fetch("http://localhost:9090/jsonrpc", {
+        method: "POST",
+        headers: {
+            "content-type": "application/json",
+        },
+        body: JSON.stringify(jsonRPCRequest),
+    }).then((response) => {
+        if (response.status === 200) {
+            // Use client.receive when you received a JSON-RPC response.
+            return response
+                .json()
+                .then((jsonRPCResponse) => client.receive(jsonRPCResponse));
+        } else if (jsonRPCRequest.id !== undefined) {
+            return Promise.reject(new Error(response.statusText));
+        }
+    })
+);
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(() => resolve(), ms));
@@ -62,6 +83,27 @@ function setupBackend() {
     // 获取股票列表
     app.get(apiPrefix + "stockList", async (req, res) => {
         res.send(wrap(await getStockList(gdb)));
+    });
+
+    app.post(apiPrefix + "predict/:stock", async (req, res) => {
+        const stock = req.params.stock;
+        const query = req.query.query || "close";
+        const body = req.body;
+        logger.info("body: ", body);
+        const dataRows = await dip.stock.index.getMonthHis(stock);
+        const data = dataRows.map(row => {
+            const col = row[query];
+            const value = parseFloat(col);
+            if (isNaN(value)) return col;
+            return value;
+        });
+        try {
+            const result = await client.request("train_and_predict", {dataset: data, ...body});
+            res.send(wrap(result));
+        } catch (e) {
+            logger.error(e.toString());
+            res.send(wrap(null, 500, e.toString()));
+        }
     });
 
     // 直接调用 API
