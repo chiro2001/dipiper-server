@@ -1,7 +1,6 @@
 const logger = require('simple-node-logger').createSimpleLogger();
 const dip = require("dipiper");
 const MongoClient = require('mongodb').MongoClient;
-const mongoURI = "mongodb://localhost:27017/dipiper";
 const express = require("express");
 const jsonRPC = require("json-rpc-2.0");
 const fetch = require("node-fetch");
@@ -9,9 +8,15 @@ const JSONRPCClient = jsonRPC.JSONRPCClient;
 
 const runPort = 8000;
 const app = express();
+// 访问 http://localhost:8000/api/v1/...
 const apiPrefix = "/api/v1/";
 var gdb = null;
+// 安装 MogoDB 之后默认即可
+const mongoURI = "mongodb://localhost:27017/dipiper";
 
+/**
+ * 远程调用 Python 部分
+ */
 const client = new JSONRPCClient((jsonRPCRequest) =>
     fetch("http://localhost:9090/jsonrpc", {
         method: "POST",
@@ -35,11 +40,21 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(() => resolve(), ms));
 }
 
+/**
+ * API 回调默认说明文字
+ */
 const codeMessage = {
     200: "OK",
     500: "Internal Error"
 };
 
+/**
+ * 将 data 包裹成标准返回格式
+ * @param {*} data 
+ * @param {*} code 
+ * @param {*} message 
+ * @returns 
+ */
 function wrap(data, code, message) {
     return {
         data,
@@ -49,6 +64,10 @@ function wrap(data, code, message) {
 }
 
 
+/**
+ * 更新数据库中股票列表信息
+ * @param {*} db 
+ */
 async function updateStockList(db) {
     const stockList = await dip.stock.symbols.getStockList();
     const col = db.collection("stockList");
@@ -59,6 +78,11 @@ async function updateStockList(db) {
     console.log("updateStockList done.");
 }
 
+/**
+ * 获取所有股票列表信息
+ * @param {*} db 
+ * @returns 
+ */
 async function getStockList(db) {
     const col = db.collection("stockList");
     const data = await col.find({}).toArray();
@@ -66,6 +90,10 @@ async function getStockList(db) {
     return data;
 }
 
+/**
+ * 得到数据库接口
+ * @returns MongoDB 数据库接口
+ */
 async function getDB() {
     return await new Promise((resolve, reject) => {
         MongoClient.connect(mongoURI, function (err, db) {
@@ -76,6 +104,9 @@ async function getDB() {
     });
 }
 
+/**
+ * 设置后端的路由
+ */
 function setupBackend() {
     // Json 中间件
     app.use(express.json());
@@ -85,6 +116,12 @@ function setupBackend() {
         res.send(wrap(await getStockList(gdb)));
     });
 
+    // 获取某个股票的每月数据并且预测
+    // :stock: 股票代码
+    // query: 预测数据标号，见 http://dipiper.tech/gu-piao/zhi-shu-shu-ju.html#%E6%8C%87%E6%95%B0%E6%97%A5%E7%BA%BF%E6%95%B0%E6%8D%AE 的表格
+    // body: { x_data: 需要进行预测的一段数据序列, model_type: 模型类型}
+    //      x_data: [0, 2, 3, 4, ...] 长度任意
+    //      model_type: lstm | bilstm | gru
     app.post(apiPrefix + "predict/:stock", async (req, res) => {
         const stock = req.params.stock;
         const query = req.query.query || "close";
@@ -98,15 +135,22 @@ function setupBackend() {
             return value;
         });
         try {
-            const result = await client.request("train_and_predict", {dataset: data, ...body});
-            res.send(wrap(result));
+            const result = await client.request("train_and_predict", { dataset: data, ...body });
+            res.send(wrap({
+                dataRows,
+                data,
+                result
+            }));
         } catch (e) {
             logger.error(e.toString());
             res.send(wrap(null, 500, e.toString()));
         }
     });
 
-    // 直接调用 API
+    // 直接调用 dipiper API，例子：
+    // dip.stock.finance.getGuideLine("000651", "2018") ->
+    // http://localhost:8000/api/v1/finance/getGuideLine?a=000651&b=2018
+    // URL 中 query 的参数表示调用的 dipiper API 中的函数参数顺序，可以是 a=..&b=.. 或者 a1=..&a2=..，符合字典序即可
     app.get(apiPrefix + ":package/:function", async (req, res) => {
         const params = req.params;
         const query = req.query;
@@ -129,12 +173,18 @@ function setupBackend() {
     });
 }
 
+/**
+ * 启动后端服务监听
+ */
 async function launchBackend() {
     app.listen(runPort, () => {
         logger.info("Server launched at port ", runPort);
     });
 }
 
+/**
+ * 主函数
+ */
 async function main() {
     const database = await getDB();
     const db = database.db("dipiper");
