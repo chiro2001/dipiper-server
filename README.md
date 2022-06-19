@@ -8,6 +8,8 @@
 npm install
 ```
 
+安装 MongoDB：[MongoDB Community Download | MongoDB](https://www.mongodb.com/try/download/community)
+
 ## 运行
 
 ### 运行服务器
