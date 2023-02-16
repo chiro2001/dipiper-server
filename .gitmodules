@@ -1,0 +1,3 @@
+[submodule "dipiper"]
+	path = dipiper
+	url = https://github.com/chiro2001/dipiper
