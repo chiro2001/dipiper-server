@@ -125,9 +125,9 @@ function setupBackend() {
         const data = body.data;
         const length = body.length;
         const x_data = createArray(length);
-        const result = await client.request("train_and_predict", { dataset: data, x_data, ...body });
+        const result = await client.request("train_and_predict", { dataset: data, x_data });
         res.send(wrap({
-            result
+            result: result.data
         }));
     });
 
