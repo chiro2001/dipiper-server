@@ -104,6 +104,10 @@ async function getDB() {
     });
 }
 
+const createArray = (length, start = 0, end = length) =>
+  Array.from({ length: end - start }, (_, i) => i + start);
+
+
 /**
  * 设置后端的路由
  */
@@ -114,6 +118,17 @@ function setupBackend() {
     // 获取股票列表
     app.get(apiPrefix + "stockList", async (req, res) => {
         res.send(wrap(await getStockList(gdb)));
+    });
+
+    app.post(apiPrefix + "data_predict", async (req, res) => {
+        const body = req.body;
+        const data = body.data;
+        const length = body.length;
+        const x_data = createArray(length);
+        const result = await client.request("train_and_predict", { dataset: data, x_data, ...body });
+        res.send(wrap({
+            result
+        }));
     });
 
     // 获取某个股票的每月数据并且预测
