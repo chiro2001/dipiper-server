@@ -104,9 +104,43 @@ async function getDB() {
     });
 }
 
-const createArray = (length, start = 0, end = length) =>
-  Array.from({ length: end - start }, (_, i) => i + start);
+/**
+ * 创建一个数组
+ * @param {*} length 
+ * @param {*} start 
+ * @param {*} end 
+ * @returns 
+ */
+const createArray = (length, start = 0, end = length) => Array.from({ length: end - start }, (_, i) => i + start);
 
+/**
+ * 获取数据库中缓存的 API 数据
+ * @param {*} package 
+ * @param {*} fun 
+ * @param {*} args 
+ * @returns 
+ */
+async function getCache(package, fun, args) {
+    const col = gdb.collection("cache");
+    const query = {
+        package,
+        "function": fun,
+        args,
+    };
+    logger.info("cache query: ", query);
+    const data = await col.findOne(query);
+    return data;
+}
+
+async function setCache(package, fun, args, data) {
+    const col = gdb.collection("cache");
+    await col.insertOne({
+        package,
+        "function": fun,
+        args,
+        data,
+    });
+}
 
 /**
  * 设置后端的路由
@@ -173,13 +207,33 @@ function setupBackend() {
         logger.info("query: ", req.query);
         const queryKeys = Object.keys(query).sort();
         const args = queryKeys.map(key => query[key])
+        const package = params['package'];
+        const fun = params['function'];
         try {
-            logger.info("package ", dip.stock[params['package']], " function ", dip.stock[params['package']][params['function']], " args: ", args);
-            const data = await dip.stock[params['package']][params['function']](...args);
-            dip.stock.symbols.getAreaList().then(data => {
-                console.log(data);
-            });
-            logger.info("data: ", data);
+            const cached = await getCache(package, fun, args);
+            if (cached && cached.data) {
+                logger.info("use cached data");
+                res.send(wrap(cached.data));
+                return;
+            } else {
+                logger.info("got invalid cached: ", cached);
+            }
+        } catch (e) {
+            logger.error("cannot get cache: ", e);
+        }
+        try {
+            logger.info("package ", package, " function ", fun, " args: ", args);
+            const data = await dip.stock[package][fun](...args);
+            // dip.stock.symbols.getAreaList().then(data => {
+            //     console.log(data);
+            // });
+            // logger.info("data: ", data);
+            // insert data into cache
+            try {
+                await setCache(package, fun, args, data);
+            } catch (e) {
+                logger.error("cannot set cache: ", e);
+            }
             res.send(wrap(data));
         } catch (e) {
             console.error(e);
@@ -212,6 +266,7 @@ async function main() {
     logger.info("stock count: ", stockCount);
     // await sleep(1000);
     // process.exit(0);
+    // console.log(await getCache("trading", "getWeekHis", ["sz000725"]));
 }
 
 main();
