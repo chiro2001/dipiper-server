@@ -154,6 +154,7 @@ function setupBackend() {
         res.send(wrap(await getStockList(gdb)));
     });
 
+    // 依据上传数据进行预测
     app.post(apiPrefix + "data_predict", async (req, res) => {
         const body = req.body;
         const data = body.data;
@@ -196,6 +197,58 @@ function setupBackend() {
         }
     });
 
+    app.get(apiPrefix + "income_analysis/:code", async (req, res) => {
+        const code = req.params.code;
+        // 获取三年的数据
+        const year_count = 3;
+        let years_data = [];
+        const year_now = 2022;
+        const col2 = gdb.collection("income_analysis");
+        const col = gdb.collection("income_data");
+        const last_ave = await col2.findOne({code, year_now});
+        function parse_data(year_data) {
+            if (year_data == undefined) return NaN;
+            const income_str = (year_data.income != undefined) ? year_data.income.replaceAll(",", "") : "0.0";
+            const income_value = +(income_str);
+            return income_value;
+        }
+        if (last_ave && last_ave.ave != undefined) {
+            let incomes = [];
+            for (let i = 0; i < year_count; i++) {
+                const year = year_now - i;
+                const c = await col.findOne({year, code});
+                const p = c && c.data && c.data.profit_statemet;
+                // console.log("data", c, "p", p);
+                incomes[i] = parse_data(p && p[0]);
+            }
+            res.send(wrap({
+                incomes, ave: last_ave.ave
+            }));
+            return;
+        }
+        for (let i = 0; i < year_count; i++) {
+            const year = year_now - i;
+            const c = await col.findOne({year, code});
+            if (c && c.data) {
+                years_data[i] = c.data;
+            } else {
+                const data = await dip.stock.finance.getProfitStatment(code, "" + year, "general");
+                // 存储数据到数据库
+                col.insertOne({year, code, data});
+                years_data[i] = data;
+            }
+        }
+        // 分析三年数据
+        let incomes = [];
+        for (let i = 0; i < year_count; i++) {
+            const p = years_data[i].profit_statemet;
+            incomes[i] = parse_data(p && p[0]);
+        }
+        const ave = ((incomes[0] / incomes[1]) + (incomes[1] / incomes[2])) / 2;
+        col2.insertOne({code, year_now, ave});
+        res.send(wrap({incomes, ave}));
+    });
+
     // 直接调用 dipiper API，例子：
     // dip.stock.finance.getGuideLine("000651", "2018") ->
     // http://localhost:8000/api/v1/finance/getGuideLine?a=000651&b=2018
@@ -224,10 +277,6 @@ function setupBackend() {
         try {
             logger.info("package ", package, " function ", fun, " args: ", args);
             const data = await dip.stock[package][fun](...args);
-            // dip.stock.symbols.getAreaList().then(data => {
-            //     console.log(data);
-            // });
-            // logger.info("data: ", data);
             // insert data into cache
             try {
                 await setCache(package, fun, args, data);
