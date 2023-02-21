@@ -86,7 +86,7 @@ async function updateStockList(db) {
 async function getStockList(db) {
     const col = db.collection("stockList");
     const data = await col.find({}).toArray();
-    console.log(data);
+    // console.log(data);
     return data;
 }
 
