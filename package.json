@@ -11,5 +11,15 @@
   "scripts": {
     "dev": "node run.js",
     "test": "node test.js"
+  },
+  "name": "dipiper-server",
+  "bin": {
+    "dipiper-server": "./run.js"
+  },
+  "pkg": {
+    "scripts": "./run.js",
+    "assets": "./dipiper/",
+    "targets": [ "node16-linux-x64" ],
+    "outputPath": "dist"
   }
 }
