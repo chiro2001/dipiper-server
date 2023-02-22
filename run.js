@@ -12,7 +12,7 @@ const app = express();
 const apiPrefix = "/api/v1/";
 var gdb = null;
 // 安装 MogoDB 之后默认即可
-const mongoURI = "mongodb://127.0.0.1/dipiper";
+const mongoURI = process.env.MONGO_URI || "mongodb://127.0.0.1/dipiper";
 
 /**
  * 远程调用 Python 部分
