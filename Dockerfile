@@ -3,7 +3,7 @@ FROM mongo:latest
 WORKDIR /app/
 
 RUN apt-get update \
-    && apt-get install -y wget gnupg sudo
+    && apt-get install -y wget gnupg sudo vim nano
 
 RUN mkdir -p /app/nodejs
 RUN wget https://nodejs.org/download/release/v18.14.2/node-v18.14.2-linux-x64.tar.gz
@@ -26,7 +26,9 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key
 # Uncomment to skip the chromium download when installing puppeteer. If you do,
 # you'll need to launch puppeteer with:
 #     browser.launch({executablePath: 'google-chrome-stable'})
-# ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD true
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD true
+# ENV PUPPETEER_EXECUTABLE_PATH=/opt/google/chrome/chrome
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
 RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
     && mkdir -p /home/pptruser/Downloads \
@@ -41,15 +43,16 @@ ENV NODE_PATH=/app/nodejs/node-v18.14.2-linux-x64/bin
 ENV http_proxy=http://r.chiro.work:14514
 ENV https_proxy=http://r.chiro.work:14514
 # Install puppeteer so it's available in the container.
-RUN PATH=$PATH:$NODE_PATH $NPM config set http-proxy $http_proxy
-RUN PATH=$PATH:$NODE_PATH $NPM config set https-proxy $http_proxy
-RUN PATH=$PATH:$NODE_PATH $NPM config set proxy $http_proxy
+# RUN PATH=$PATH:$NODE_PATH $NPM config set http-proxy $http_proxy
+# RUN PATH=$PATH:$NODE_PATH $NPM config set https-proxy $http_proxy
+# RUN PATH=$PATH:$NODE_PATH $NPM config set proxy $http_proxy
 RUN PATH=$PATH:$NODE_PATH $NPM i -g yarn
 RUN PATH=$PATH:$NODE_PATH yarn
 
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 RUN usermod -a -G sudo pptruser
 COPY --chown=pptruser:pptruser dipiper_start.sh /app/
+RUN chown -R pptruser:pptruser /app/
 
 # Run everything after as non-privileged user.
 USER pptruser
