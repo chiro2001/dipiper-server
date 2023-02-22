@@ -19,7 +19,7 @@
   "pkg": {
     "scripts": "./run.js",
     "assets": "./dipiper/",
-    "targets": [ "node16-linux-x64" ],
+    "targets": [ "node18-linux-x64" ],
     "outputPath": "dist"
   }
 }
